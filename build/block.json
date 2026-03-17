@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "bdn/story-summary",
+  "version": "1.0.0",
+  "title": "Story Summary",
+  "category": "text",
+  "icon": "list-view",
+  "description": "AI-generated bullet-point summary displayed at the top of a story.",
+  "keywords": [
+    "summary",
+    "bullets",
+    "AI",
+    "brief",
+    "in brief"
+  ],
+  "supports": {
+    "html": false,
+    "reusable": false,
+    "multiple": false,
+    "inserter": true
+  },
+  "attributes": {
+    "bullets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "generated": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "editorScript": "file:./index.js",
+  "render": "file:./render.php",
+  "style": "file:./style-index.css"
+}
