@@ -2,13 +2,15 @@
 
 import logging
 import os
-from datetime import date
+import re
+from datetime import date, datetime
 
 import yaml
 
 from src.fetcher import fetch_page, search_candidate_events
 from src.extractor import extract_events
 from src.airtable_client import AirtableClient
+from src.mobilize_source import fetch_mobilize_events
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -71,6 +73,18 @@ def process_candidate(
             location = event.get("location", "")
             if not dt or not location:
                 continue
+            # Validate date format and skip past events
+            if not re.match(r"^\d{4}-\d{2}-\d{2}", dt):
+                logger.warning(f"Skipping invalid date '{dt}' for {name}")
+                continue
+            try:
+                event_date = datetime.fromisoformat(dt).date()
+                if event_date < date.today():
+                    logger.debug(f"Skipping past event: {name} on {dt}")
+                    continue
+            except ValueError:
+                logger.warning(f"Skipping unparseable date '{dt}' for {name}")
+                continue
             if client.is_duplicate(name, dt, location):
                 logger.debug(f"Skipping duplicate: {name} on {dt} at {location}")
                 continue
@@ -104,7 +118,41 @@ def main():
     )
     client.get_existing_events()
 
+    # Build candidate-to-race lookup
+    candidate_races = {}
+    for race_key, race_label in RACE_LABELS.items():
+        for c in config.get(race_key, []):
+            candidate_races[c["name"]] = race_label
+
+    # 1. Mobilize.us events
     total = 0
+    mobilize_events = fetch_mobilize_events()
+    for evt in mobilize_events:
+        dt = evt["date_time"]
+        location = evt["location"]
+        candidate = evt.get("candidate", "")
+        if not candidate:
+            continue
+        race = candidate_races.get(candidate, "")
+        if not race:
+            continue
+        if client.is_duplicate(candidate, dt, location):
+            continue
+        record = {
+            "Candidate": candidate,
+            "Race": race,
+            "Event Type": evt.get("event_type", "Other"),
+            "Date & Time": dt,
+            "Location": location,
+            "Source URL": evt.get("source_url", ""),
+            "Source": "Campaign Website",
+            "Last Verified": date.today().isoformat(),
+        }
+        client.add_event(record)
+        total += 1
+        logger.info(f"Mobilize: {candidate} - {evt.get('event_type')} on {dt} at {location}")
+
+    # 2. Web scraping + Brave search
     for race_key, race_label in RACE_LABELS.items():
         candidates = config.get(race_key, [])
         for candidate in candidates:
