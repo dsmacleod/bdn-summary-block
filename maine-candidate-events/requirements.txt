@@ -1,0 +1,8 @@
+requests>=2.31
+trafilatura>=1.8
+googlesearch-python>=1.2
+anthropic>=0.40
+pyairtable>=2.3
+pyyaml>=6.0
+thefuzz>=0.22
+python-Levenshtein>=0.25

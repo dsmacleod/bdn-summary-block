@@ -1,0 +1,126 @@
+# Maine 2026 Candidate Registry
+# Update this file as candidates declare or withdraw
+
+senate:
+  - name: Susan Collins
+    party: Republican
+    sources:
+      - https://www.collins.senate.gov/
+      - https://www.facebook.com/susancollins
+  - name: Janet Mills
+    party: Democratic
+    sources:
+      - https://janetmills.com/
+      - https://www.facebook.com/JanetMillsMaine
+  - name: Graham Platner
+    party: Democratic
+    sources:
+      - https://www.facebook.com/GrahamPlatnerForMaine
+  - name: David Costello
+    party: Democratic
+    sources: []
+  - name: Ethan Alcorn
+    party: Independent
+    sources: []
+  - name: Timothy Rich
+    party: Independent
+    sources: []
+  - name: David Evans
+    party: Independent
+    sources:
+      - https://davidevansforsenate.com/
+
+governor:
+  # Democrats
+  - name: Shenna Bellows
+    party: Democratic
+    sources:
+      - https://www.facebook.com/ShennaBellows
+  - name: Troy Jackson
+    party: Democratic
+    sources:
+      - https://www.facebook.com/SenatorTroyJackson
+  - name: Angus King III
+    party: Democratic
+    sources: []
+  - name: Hannah Pingree
+    party: Democratic
+    sources:
+      - https://www.facebook.com/HannahPingree
+  - name: Nirav Shah
+    party: Democratic
+    sources: []
+  # Republicans
+  - name: Jonathan Bush
+    party: Republican
+    sources: []
+  - name: Bobby Charles
+    party: Republican
+    sources: []
+  - name: David Jones
+    party: Republican
+    sources: []
+  - name: James Libby
+    party: Republican
+    sources: []
+  - name: Garrett Mason
+    party: Republican
+    sources: []
+  - name: Owen McCarthy
+    party: Republican
+    sources: []
+  - name: Ben Midgley
+    party: Republican
+    sources: []
+  - name: Robert Wessels
+    party: Republican
+    sources: []
+  # Independents
+  - name: Richard Bennett
+    party: Independent
+    sources:
+      - https://bennettforgovernor.com/
+  - name: W. Edward Crockett
+    party: Independent
+    sources: []
+  - name: John Glowa
+    party: Independent
+    sources:
+      - https://johnglowaforgovernor.com/
+  - name: Derek Levasseur
+    party: Independent
+    sources: []
+  - name: Alexander Murchison
+    party: Independent
+    sources: []
+
+cd1:
+  - name: Chellie Pingree
+    party: Democratic
+    sources:
+      - https://www.pingree.house.gov/
+      - https://www.facebook.com/RepChelliePingree
+  - name: Joshua Pietrowicz
+    party: Republican
+    sources: []
+  - name: Ronald Russell
+    party: Republican
+    sources: []
+
+cd2:
+  - name: Joe Baldacci
+    party: Democratic
+    sources: []
+  - name: Matthew Dunlap
+    party: Democratic
+    sources: []
+  - name: Paige Loud
+    party: Democratic
+    sources: []
+  - name: Jordan Wood
+    party: Democratic
+    sources: []
+  - name: Paul LePage
+    party: Republican
+    sources:
+      - https://www.facebook.com/PaulLePage
