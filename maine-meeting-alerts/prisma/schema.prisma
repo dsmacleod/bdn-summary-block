@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Meeting {
+  id           String    @id @default(cuid())
+  title        String
+  committee    String?
+  streamUrl    String
+  platform     String // "youtube" | "vimeo"
+  status       String    @default("pending") // "pending" | "transcribing" | "analyzing" | "completed" | "failed"
+  errorMessage String?
+  meetingDate  DateTime?
+  summary      String?   @db.Text
+  keyPoints    Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  segments      TranscriptSegment[]
+  notifications Notification[]
+
+  @@index([status])
+  @@index([meetingDate])
+}
+
+model TranscriptSegment {
+  id           String   @id @default(cuid())
+  meetingId    String
+  meeting      Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  text         String   @db.Text
+  startTime    Float
+  endTime      Float
+  speakerLabel String?
+  segmentIndex Int
+  createdAt    DateTime @default(now())
+
+  @@index([meetingId, segmentIndex])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  alertRules AlertRule[]
+}
+
+model AlertRule {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topicDescription String
+  keywords         String[]
+  committeeFilter  String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  notifications Notification[]
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model Notification {
+  id            String    @id @default(cuid())
+  userId        String
+  alertRuleId   String
+  alertRule     AlertRule @relation(fields: [alertRuleId], references: [id], onDelete: Cascade)
+  meetingId     String
+  meeting       Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  matchedTopic  String
+  relevantQuote String?   @db.Text
+  channel       String    @default("email")
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([meetingId])
+}
+
+model MeetingSource {
+  id          String   @id @default(cuid())
+  platform    String
+  channelId   String
+  channelName String
+  committee   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@unique([platform, channelId])
+}
