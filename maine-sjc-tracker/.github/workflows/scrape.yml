@@ -1,0 +1,26 @@
+name: Scrape Maine SJC Cases
+
+on:
+  schedule:
+    - cron: '0 10 * * 1'  # Weekly on Monday at 10am UTC (6am ET)
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r maine-sjc-tracker/requirements.txt
+
+      - name: Run scraper
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        working-directory: maine-sjc-tracker
+        run: python main.py
