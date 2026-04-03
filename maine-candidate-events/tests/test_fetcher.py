@@ -17,7 +17,17 @@ def test_fetch_page_handles_failure():
         assert result is None
 
 def test_search_candidate_events_returns_urls():
-    with patch("src.fetcher.search") as mock_search:
-        mock_search.return_value = ["https://example.com/event1", "https://example.com/event2"]
-        urls = search_candidate_events("Susan Collins")
-        assert len(urls) == 2
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "web": {
+            "results": [
+                {"url": "https://example.com/event1"},
+                {"url": "https://example.com/event2"},
+            ]
+        }
+    }
+    with patch("src.fetcher.requests.get", return_value=mock_response):
+        with patch.dict("os.environ", {"BRAVE_API_KEY": "test-key"}):
+            urls = search_candidate_events("Susan Collins")
+            assert len(urls) == 2

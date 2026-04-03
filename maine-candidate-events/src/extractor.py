@@ -1,20 +1,29 @@
 import json
 import logging
+from datetime import date
 import anthropic
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_PROMPT = """Extract all upcoming political campaign events from the following text for the candidate "{candidate_name}".
+EXTRACTION_PROMPT = """Extract ONLY explicitly announced upcoming events from the following text for the candidate "{candidate_name}".
 
-For each event, return a JSON object with:
+STRICT RULES:
+- ONLY extract events where the text explicitly states a specific date AND location for a future event.
+- A news article ABOUT a candidate is NOT an event. Do not invent events from news coverage.
+- Do NOT guess or infer dates. The date must be clearly written in the text (e.g., "April 15" or "March 30 at 6pm").
+- Do NOT guess or infer locations. The venue/address must be explicitly stated.
+- If the text describes an event that already happened (past tense: "held", "attended", "spoke at"), skip it entirely.
+- When in doubt, return []. It is MUCH better to miss an event than to fabricate one.
+
+Today's date is {today}. Do NOT include events before today.
+
+For each CONFIRMED upcoming event, return a JSON object with:
 - event_type: one of "Town Hall", "Rally", "Debate", "Fundraiser", "Press Conference", "Campaign Stop", "Forum", "Other"
 - date_time: ISO 8601 format (YYYY-MM-DDTHH:MM:SS). If no time is given, use T00:00:00.
 - location: venue name and city/town (e.g., "Bangor Civic Center, Bangor")
 - source_url: "{source_url}"
 
-Return ONLY a JSON array. If no events are found, return [].
-Do NOT include past events (before today's date).
-Do NOT hallucinate events — only extract events explicitly mentioned in the text.
+Return ONLY a JSON array. If no confirmed upcoming events are found, return [].
 
 Text:
 {text}
@@ -32,6 +41,7 @@ def extract_events(
         candidate_name=candidate_name,
         source_url=source_url,
         text=text[:8000],
+        today=date.today().isoformat(),
     )
 
     try:
