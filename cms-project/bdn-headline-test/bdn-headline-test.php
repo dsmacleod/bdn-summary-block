@@ -35,4 +35,19 @@ add_action( 'plugins_loaded', function (): void {
 	( new BDN_Headline_Test\Frontend_Assets() )->register();
 	( new BDN_Headline_Test\Cron_Resolver( $settings ) )->register();
 	( new BDN_Headline_Test\Admin_Page() )->register();
+
+	add_action( 'enqueue_block_editor_assets', function (): void {
+		$asset_file = BDN_HT_DIR . 'build/editor/index.asset.php';
+		$asset      = file_exists( $asset_file ) ? require $asset_file : [
+			'dependencies' => [],
+			'version'      => '1.0.0',
+		];
+		wp_enqueue_script(
+			'bdn-headline-test-editor',
+			BDN_HT_URL . 'build/editor/index.js',
+			$asset['dependencies'],
+			$asset['version'],
+			true
+		);
+	} );
 } );
