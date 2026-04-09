@@ -49,6 +49,14 @@ class GA4_Client {
                                     ],
                                 ],
                             ],
+                            [
+                                'filter' => [
+                                    'fieldName'    => 'customEvent:post_id',
+                                    'inListFilter' => [
+                                        'values' => array_map( 'strval', $post_ids ),
+                                    ],
+                                ],
+                            ],
                         ],
                     ],
                 ],

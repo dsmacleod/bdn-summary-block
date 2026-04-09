@@ -83,6 +83,15 @@ class Cron_Resolver {
 		}
 
 		if ( ! $significant ) {
+			$started = (int) get_post_meta( $post_id, '_headline_test_started', true );
+			if ( ! $started ) {
+				update_post_meta( $post_id, '_headline_test_started', time() );
+				return;
+			}
+			$max_hours = $this->settings->get( 'max_duration_hours' );
+			if ( ( time() - $started ) >= $max_hours * 3600 ) {
+				$this->declare_winner( $post_id, $best_id );
+			}
 			return;
 		}
 

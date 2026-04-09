@@ -28,6 +28,12 @@ class Post_Meta {
 				'single'       => true,
 				'show_in_rest' => true,
 			],
+			'_headline_test_started' => [
+				'type'         => 'string',
+				'description'  => 'Timestamp when the test became active',
+				'single'       => true,
+				'show_in_rest' => true,
+			],
 		];
 
 		foreach ( $meta_keys as $key => $args ) {
