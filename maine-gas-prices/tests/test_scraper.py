@@ -1,6 +1,6 @@
 import os
 import pytest
-from fetch_prices import parse_state_average, parse_national_average, parse_state_trend, parse_counties, build_payload
+from fetch_prices import parse_state_average, parse_national_average, parse_state_trend, parse_counties, build_payload, validate_payload
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -52,3 +52,23 @@ def test_build_payload_happy():
     assert payload["cheapest"]["avg_regular"] == min(c["avg_regular"] for c in payload["counties"])
     assert payload["most_expensive"]["avg_regular"] == max(c["avg_regular"] for c in payload["counties"])
     assert payload["updated"].endswith("Z")
+
+def _good_payload():
+    html = _load("aaa-happy.html")
+    cfg  = _load("aaa-map-cfg-happy.js")
+    return build_payload(html, cfg)
+
+def test_validate_payload_accepts_good():
+    validate_payload(_good_payload())  # should not raise
+
+def test_validate_payload_rejects_missing_county():
+    payload = _good_payload()
+    payload["counties"] = payload["counties"][:15]
+    with pytest.raises(ValueError, match="16 counties"):
+        validate_payload(payload)
+
+def test_validate_payload_rejects_absurd_price():
+    payload = _good_payload()
+    payload["counties"][0]["avg_regular"] = 99.99
+    with pytest.raises(ValueError, match="out of range"):
+        validate_payload(payload)

@@ -111,3 +111,13 @@ def build_payload(html: str, map_cfg_js: str) -> dict:
         "cheapest": {"name": cheapest["name"], "avg_regular": cheapest["avg_regular"]},
         "most_expensive": {"name": most_expensive["name"], "avg_regular": most_expensive["avg_regular"]},
     }
+
+def validate_payload(p: dict) -> None:
+    if len(p.get("counties", [])) != 16:
+        raise ValueError("Expected exactly 16 counties")
+    for c in p["counties"]:
+        if not (1.0 < c["avg_regular"] < 10.0):
+            raise ValueError(f"County {c['name']} price out of range: {c['avg_regular']}")
+    for key in ("state", "national"):
+        if not (1.0 < p[key]["avg_regular"] < 10.0):
+            raise ValueError(f"{key} avg out of range")
