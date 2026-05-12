@@ -72,3 +72,8 @@ def test_validate_payload_rejects_absurd_price():
     payload["counties"][0]["avg_regular"] = 99.99
     with pytest.raises(ValueError, match="out of range"):
         validate_payload(payload)
+
+def test_parse_counties_missing_raises():
+    js = _load("aaa-map-cfg-missing-county.js")
+    with pytest.raises(ValueError, match="Piscataquis"):
+        parse_counties(js)
