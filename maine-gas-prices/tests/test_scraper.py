@@ -1,6 +1,6 @@
 import os
 import pytest
-from fetch_prices import parse_state_average, parse_national_average, parse_state_trend, parse_counties
+from fetch_prices import parse_state_average, parse_national_average, parse_state_trend, parse_counties, build_payload
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -39,3 +39,16 @@ def test_parse_counties_happy():
     for c in counties:
         assert "fips" in c and c["fips"].startswith("23")
         assert 1.0 < c["avg_regular"] < 10.0
+
+def test_build_payload_happy():
+    html = _load("aaa-happy.html")
+    map_cfg = _load("aaa-map-cfg-happy.js")
+    payload = build_payload(html, map_cfg)
+    assert payload["state"]["name"] == "Maine"
+    assert payload["state"]["avg_regular"] > 0
+    assert set(payload["state"]["trend"].keys()) == {"week_ago","month_ago","year_ago"}
+    assert payload["national"]["avg_regular"] > 0
+    assert len(payload["counties"]) == 16
+    assert payload["cheapest"]["avg_regular"] == min(c["avg_regular"] for c in payload["counties"])
+    assert payload["most_expensive"]["avg_regular"] == max(c["avg_regular"] for c in payload["counties"])
+    assert payload["updated"].endswith("Z")

@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime, timezone
 
 ME_FIPS = {
     "Androscoggin": "23001", "Aroostook": "23003", "Cumberland": "23005",
@@ -93,3 +94,20 @@ def parse_counties(map_cfg_js: str) -> list:
     if missing:
         raise ValueError(f"Missing counties in map_data: {sorted(missing)}")
     return counties
+
+def build_payload(html: str, map_cfg_js: str) -> dict:
+    counties = parse_counties(map_cfg_js)
+    cheapest = min(counties, key=lambda c: c["avg_regular"])
+    most_expensive = max(counties, key=lambda c: c["avg_regular"])
+    return {
+        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "state": {
+            "name": "Maine",
+            "avg_regular": parse_state_average(html),
+            "trend": parse_state_trend(html),
+        },
+        "national": {"avg_regular": parse_national_average(html)},
+        "counties": counties,
+        "cheapest": {"name": cheapest["name"], "avg_regular": cheapest["avg_regular"]},
+        "most_expensive": {"name": most_expensive["name"], "avg_regular": most_expensive["avg_regular"]},
+    }
