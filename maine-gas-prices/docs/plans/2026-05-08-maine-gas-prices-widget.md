@@ -18,6 +18,26 @@
 
 ---
 
+## Plan amendment (discovered during Task 2 — 2026-05-11)
+
+The AAA Maine state page does NOT contain county-level prices in the static HTML. County data is loaded client-side from a separate WordPress endpoint that returns a JS config blob:
+
+- **HTML page** (`https://gasprices.aaa.com/?state=ME`) — has Maine state avg, national avg, and the Yesterday/Week/Month/Year trend table for state. ~100KB.
+- **Map config JS** (`https://gasprices.aaa.com/index.php?premiumhtml5map_js_data=true&map_id=21`) — has a `map_data` JSON object with all 16 Maine counties and their current regular-gas prices in the `comment` field. ~4KB.
+
+Example `map_data` row:
+```json
+"st1":{"id":1,"name":"Androscoggin","comment":"$4.561","color_map":"#ca3338", ...}
+```
+
+Tasks 6 and 11 are updated below to fetch both URLs and parse `comment` as the regular price (3 decimal places, e.g. `$4.561`). Tasks 3, 4, 5 (state/national/trend) still parse the main HTML and remain as written. AAA prices use 3 decimal places throughout — every regex range `\d+\.\d{2,3}` already accommodates this; no change needed.
+
+Fixture pair captured:
+- `tests/fixtures/aaa-happy.html` (HTML)
+- `tests/fixtures/aaa-map-cfg-happy.js` (map config)
+
+---
+
 ## Repository layout (target)
 
 ```
@@ -300,19 +320,21 @@ def parse_state_trend(html: str) -> dict:
 
 ---
 
-## Task 6: Scraper — parse county prices (TDD)
+## Task 6: Scraper — parse county prices from map config (TDD)
 
 **Files:**
 - Modify: `maine-gas-prices/tests/test_scraper.py`
 - Modify: `maine-gas-prices/fetch_prices.py`
 
+> **Input:** counties come from the **map config JS endpoint**, not the HTML page. Use the fixture `tests/fixtures/aaa-map-cfg-happy.js`. Each county appears in a `map_data` JSON object with the shape `{"id":N,"name":"Aroostook","comment":"$4.522", ...}`. The `comment` field holds the regular-gas price.
+
 **Step 1: Write failing test**
 
 ```python
 def test_parse_counties_happy():
-    html = _load("aaa-happy.html")
-    counties = parse_counties(html)
-    assert len(counties) == 16  # all 16 Maine counties
+    js = _load("aaa-map-cfg-happy.js")
+    counties = parse_counties(js)
+    assert len(counties) == 16
     names = {c["name"] for c in counties}
     expected = {"Androscoggin","Aroostook","Cumberland","Franklin","Hancock",
                 "Kennebec","Knox","Lincoln","Oxford","Penobscot","Piscataquis",
@@ -327,8 +349,6 @@ def test_parse_counties_happy():
 
 **Step 3: Implement.**
 
-Add a static FIPS lookup (Maine counties are well-known, hardcode them):
-
 ```python
 ME_FIPS = {
     "Androscoggin": "23001", "Aroostook": "23003", "Cumberland": "23005",
@@ -338,31 +358,47 @@ ME_FIPS = {
     "Somerset": "23025", "Waldo": "23027", "Washington": "23029", "York": "23031",
 }
 
-def parse_counties(html: str) -> list:
-    """Extract all 16 Maine county prices from the AAA county table."""
-    # Find each county block — exact selector depends on fixture
+def parse_counties(map_cfg_js: str) -> list:
+    """Extract all 16 Maine county prices from AAA's map config JS.
+
+    The config file contains a line of the form:
+        map_data : {"st1":{"id":1,"name":"Androscoggin","comment":"$4.561",...}, ...}
+    """
+    m = re.search(r'map_data\s*:\s*(\{.*?\})\s*,\s*groups', map_cfg_js, re.DOTALL)
+    if not m:
+        raise ValueError("Could not locate map_data block in AAA map config JS")
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"map_data is not valid JSON: {e}") from e
+
     counties = []
-    for name in ME_FIPS:
-        # AAA renders rows like: <td>Aroostook</td><td>$3.21</td>
-        m = re.search(
-            rf'>{re.escape(name)}<[^$]{{0,300}}\$(\d+\.\d{{2,3}})',
-            html, re.DOTALL,
-        )
-        if not m:
-            raise ValueError(f"Could not locate price for {name} County")
+    seen = set()
+    for entry in data.values():
+        name = entry.get("name", "").strip()
+        price_str = entry.get("comment", "")
+        pm = re.match(r'\$(\d+\.\d{2,3})', price_str)
+        if not pm:
+            raise ValueError(f"County {name!r} has unparseable price: {price_str!r}")
+        if name not in ME_FIPS:
+            raise ValueError(f"Unknown Maine county in map_data: {name!r}")
         counties.append({
             "name": name,
             "fips": ME_FIPS[name],
-            "avg_regular": float(m.group(1)),
+            "avg_regular": float(pm.group(1)),
         })
+        seen.add(name)
+    missing = set(ME_FIPS) - seen
+    if missing:
+        raise ValueError(f"Missing counties in map_data: {sorted(missing)}")
     return counties
 ```
 
-> **Implementer note:** the regex above is a starting point. Use the actual fixture markup. If AAA orders columns differently or splits the county table across multiple sections, adjust accordingly. The test asserts the contract — make the implementation match.
+Make sure `import json` is at the top of `fetch_prices.py`.
 
 **Step 4: Run** — Expected PASS.
 
-**Step 5: Commit** — `feat(maine-gas-prices): parse all 16 Maine county prices`
+**Step 5: Commit** — `feat(maine-gas-prices): parse all 16 Maine county prices from map config`
 
 ---
 
@@ -377,7 +413,8 @@ def parse_counties(html: str) -> list:
 ```python
 def test_build_payload_happy():
     html = _load("aaa-happy.html")
-    payload = build_payload(html)
+    map_cfg = _load("aaa-map-cfg-happy.js")
+    payload = build_payload(html, map_cfg)
     assert payload["state"]["name"] == "Maine"
     assert payload["state"]["avg_regular"] > 0
     assert set(payload["state"]["trend"].keys()) == {"week_ago","month_ago","year_ago"}
@@ -396,8 +433,8 @@ def test_build_payload_happy():
 ```python
 from datetime import datetime, timezone
 
-def build_payload(html: str) -> dict:
-    counties = parse_counties(html)
+def build_payload(html: str, map_cfg_js: str) -> dict:
+    counties = parse_counties(map_cfg_js)
     cheapest = min(counties, key=lambda c: c["avg_regular"])
     most_expensive = max(counties, key=lambda c: c["avg_regular"])
     return {
@@ -431,21 +468,22 @@ def build_payload(html: str) -> dict:
 ```python
 import pytest
 
-def test_validate_payload_accepts_good():
+def _good_payload():
     html = _load("aaa-happy.html")
-    payload = build_payload(html)
-    validate_payload(payload)  # should not raise
+    cfg  = _load("aaa-map-cfg-happy.js")
+    return build_payload(html, cfg)
+
+def test_validate_payload_accepts_good():
+    validate_payload(_good_payload())  # should not raise
 
 def test_validate_payload_rejects_missing_county():
-    html = _load("aaa-happy.html")
-    payload = build_payload(html)
+    payload = _good_payload()
     payload["counties"] = payload["counties"][:15]  # drop one
     with pytest.raises(ValueError, match="16 counties"):
         validate_payload(payload)
 
 def test_validate_payload_rejects_absurd_price():
-    html = _load("aaa-happy.html")
-    payload = build_payload(html)
+    payload = _good_payload()
     payload["counties"][0]["avg_regular"] = 99.99
     with pytest.raises(ValueError, match="out of range"):
         validate_payload(payload)
@@ -476,32 +514,45 @@ def validate_payload(p: dict) -> None:
 ## Task 9: Negative fixture — missing county
 
 **Files:**
-- Create: `maine-gas-prices/tests/fixtures/aaa-missing-county.html`
+- Create: `maine-gas-prices/tests/fixtures/aaa-map-cfg-missing-county.js`
 - Modify: `maine-gas-prices/tests/test_scraper.py`
 
 **Step 1: Create the broken fixture**
 
-Copy the happy fixture and remove a county block:
+Copy the happy map-config fixture and remove Piscataquis from the `map_data` JSON.
 
 ```bash
-cp maine-gas-prices/tests/fixtures/aaa-happy.html \
-   maine-gas-prices/tests/fixtures/aaa-missing-county.html
+cp maine-gas-prices/tests/fixtures/aaa-map-cfg-happy.js \
+   maine-gas-prices/tests/fixtures/aaa-map-cfg-missing-county.js
 ```
 
-Manually edit and delete every occurrence of "Piscataquis" county's row/block in the new file (use the Edit tool, not sed — verify the change visually).
+Open the copy and delete the `"st11":{"id":11,"name":"Piscataquis",...}` entry from the `map_data` object (including its trailing comma if not last). Use the Edit tool, not sed — verify the JSON still parses by running:
+
+```bash
+python3 -c "
+import re, json
+js = open('maine-gas-prices/tests/fixtures/aaa-map-cfg-missing-county.js').read()
+m = re.search(r'map_data\s*:\s*(\{.*?\})\s*,\s*groups', js, re.DOTALL)
+data = json.loads(m.group(1))
+print('counties:', len(data))
+print('names:', sorted(e['name'] for e in data.values()))
+"
+```
+
+Expected: prints `counties: 15` and a list NOT containing "Piscataquis".
 
 **Step 2: Write failing test**
 
 ```python
 def test_parse_counties_missing_raises():
-    html = _load("aaa-missing-county.html")
+    js = _load("aaa-map-cfg-missing-county.js")
     with pytest.raises(ValueError, match="Piscataquis"):
-        parse_counties(html)
+        parse_counties(js)
 ```
 
-**Step 3: Run** — Expected PASS (parse_counties already raises ValueError on missing match).
+**Step 3: Run** — Expected PASS (`parse_counties` already raises ValueError listing missing counties).
 
-If FAIL, fix `parse_counties` to ensure the error message includes the county name.
+If FAIL, ensure the error message in `parse_counties` includes the county name when listing missing entries.
 
 **Step 4: Commit** — `test(maine-gas-prices): missing-county fixture + test`
 
@@ -545,10 +596,11 @@ def test_parse_state_average_structure_changed_raises():
 ```python
 import json, os, sys, time, urllib.request, urllib.error
 
-AAA_URL = "https://gasprices.aaa.com/?state=ME"
+AAA_HTML_URL    = "https://gasprices.aaa.com/?state=ME"
+AAA_MAP_CFG_URL = "https://gasprices.aaa.com/index.php?premiumhtml5map_js_data=true&map_id=21"
 OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "prices.json")
 
-def fetch_html(url: str = AAA_URL, attempts: int = 3) -> str:
+def fetch_url(url: str, attempts: int = 3) -> str:
     last_err = None
     for i in range(attempts):
         try:
@@ -563,8 +615,9 @@ def fetch_html(url: str = AAA_URL, attempts: int = 3) -> str:
 
 def main() -> int:
     try:
-        html = fetch_html()
-        payload = build_payload(html)
+        html    = fetch_url(AAA_HTML_URL)
+        map_cfg = fetch_url(AAA_MAP_CFG_URL)
+        payload = build_payload(html, map_cfg)
         validate_payload(payload)
     except Exception as e:
         print(f"FAIL: {e}", file=sys.stderr)
@@ -579,14 +632,20 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-**Step 2: Run end-to-end against fixture (manual sanity check)**
+**Step 2: Run end-to-end against fixtures (manual sanity check)**
 
 ```bash
 cd maine-gas-prices
 pytest -v   # all green
-python3 -c "from fetch_prices import build_payload, validate_payload; \
-import json; html=open('tests/fixtures/aaa-happy.html').read(); \
-p=build_payload(html); validate_payload(p); print(json.dumps(p, indent=2)[:500])"
+python3 -c "
+from fetch_prices import build_payload, validate_payload
+import json
+html = open('tests/fixtures/aaa-happy.html').read()
+cfg  = open('tests/fixtures/aaa-map-cfg-happy.js').read()
+p = build_payload(html, cfg)
+validate_payload(p)
+print(json.dumps(p, indent=2)[:500])
+"
 ```
 
 Expected: prints valid JSON with state/national/counties.
@@ -786,10 +845,15 @@ load();
 
 ```bash
 cd maine-gas-prices
-# After Task 11, run scraper against fixture to populate data/prices.json:
-python3 -c "from fetch_prices import build_payload; import json,os; \
-os.makedirs('data', exist_ok=True); \
-json.dump(build_payload(open('tests/fixtures/aaa-happy.html').read()), open('data/prices.json','w'), indent=2)"
+# After Task 11, run scraper against fixtures to populate data/prices.json:
+python3 -c "
+from fetch_prices import build_payload
+import json, os
+os.makedirs('data', exist_ok=True)
+html = open('tests/fixtures/aaa-happy.html').read()
+cfg  = open('tests/fixtures/aaa-map-cfg-happy.js').read()
+json.dump(build_payload(html, cfg), open('data/prices.json','w'), indent=2)
+"
 python3 -m http.server 8000
 ```
 
@@ -1000,7 +1064,9 @@ cd maine-gas-prices
 python3 -c "
 from fetch_prices import build_payload
 import json
-p = build_payload(open('tests/fixtures/aaa-happy.html').read())
+html = open('tests/fixtures/aaa-happy.html').read()
+cfg  = open('tests/fixtures/aaa-map-cfg-happy.js').read()
+p = build_payload(html, cfg)
 json.dump(p, open('tests/fixtures/prices-fresh.json','w'), indent=2)
 "
 # Stale: re-stamp updated to 5 days ago
