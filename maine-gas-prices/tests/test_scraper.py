@@ -77,3 +77,8 @@ def test_parse_counties_missing_raises():
     js = _load("aaa-map-cfg-missing-county.js")
     with pytest.raises(ValueError, match="Piscataquis"):
         parse_counties(js)
+
+def test_parse_state_average_structure_changed_raises():
+    html = _load("aaa-structure-changed.html")
+    with pytest.raises(ValueError, match="state average"):
+        parse_state_average(html)
