@@ -1,6 +1,15 @@
 import json
+import os
 import re
+import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
+
+AAA_HTML_URL    = "https://gasprices.aaa.com/?state=ME"
+AAA_MAP_CFG_URL = "https://gasprices.aaa.com/index.php?premiumhtml5map_js_data=true&map_id=21"
+OUT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "prices.json")
 
 ME_FIPS = {
     "Androscoggin": "23001", "Aroostook": "23003", "Cumberland": "23005",
@@ -121,3 +130,34 @@ def validate_payload(p: dict) -> None:
     for key in ("state", "national"):
         if not (1.0 < p[key]["avg_regular"] < 10.0):
             raise ValueError(f"{key} avg out of range")
+
+def fetch_url(url: str, attempts: int = 3) -> str:
+    last_err = None
+    for i in range(attempts):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; BDN-gas-widget/1.0)"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as e:
+            last_err = e
+            if i < attempts - 1:
+                time.sleep(2 ** i)
+    raise RuntimeError(f"Failed to fetch {url} after {attempts} attempts: {last_err}")
+
+def main() -> int:
+    try:
+        html    = fetch_url(AAA_HTML_URL)
+        map_cfg = fetch_url(AAA_MAP_CFG_URL)
+        payload = build_payload(html, map_cfg)
+        validate_payload(payload)
+    except Exception as e:
+        print(f"FAIL: {e}", file=sys.stderr)
+        return 1
+    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+    with open(OUT_PATH, "w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"OK: wrote {OUT_PATH} (state ${payload['state']['avg_regular']}, {len(payload['counties'])} counties)")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
